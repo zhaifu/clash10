@@ -191,19 +191,46 @@ export const saveCustomLinks = async (config: AppConfig, links: CustomLink[]) =>
  */
 export const fetchCustomLinks = async (config: AppConfig): Promise<CustomLink[]> => {
   const path = 'clash/link.json';
-  try {
-    const file = await getRepoFile(config, path);
-    if (file) return JSON.parse(file.content);
-    
-    // Fallback if API fails or token issues (try raw public)
-    if(config.repoOwner && config.repoName) {
+  
+  // Define fallback logic as a reusable function
+  const fetchRawFallback = async () => {
+     if (!config.repoOwner || !config.repoName) return [];
+     try {
+        // Try 'main' branch first
         const publicUrl = `https://raw.githubusercontent.com/${config.repoOwner}/${config.repoName}/main/${path}`;
         const res = await fetch(publicUrl);
-        if(res.ok) return await res.json();
+        if (res.ok) {
+            return await res.json();
+        } else if (res.status === 404) {
+             // Optional: Try 'master' branch if main fails
+             const masterUrl = `https://raw.githubusercontent.com/${config.repoOwner}/${config.repoName}/master/${path}`;
+             const resMaster = await fetch(masterUrl);
+             if (resMaster.ok) return await resMaster.json();
+        }
+     } catch (rawErr) {
+        console.warn("Raw fallback fetch failed:", rawErr);
+     }
+     return [];
+  };
+
+  try {
+    // Try via API first (more reliable for private repos or immediate updates)
+    const file = await getRepoFile(config, path);
+    if (file) {
+        try {
+            return JSON.parse(file.content);
+        } catch (jsonErr) {
+            console.error("Failed to parse link.json content:", jsonErr);
+            return [];
+        }
     }
-    return [];
+    
+    // If file is null (API returned 404), try fallback
+    return await fetchRawFallback();
+
   } catch (e) {
-    console.warn("Could not fetch custom links:", e);
-    return [];
+    // If API throws error (e.g. 403 Rate Limit, Network Error), definitely try fallback
+    console.warn("API fetch for link.json failed (likely rate limit), switching to raw fallback...", e);
+    return await fetchRawFallback();
   }
 };
