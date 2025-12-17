@@ -174,13 +174,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                <Lock className="w-8 h-8 text-blue-600 dark:text-blue-400" />
              </div>
              <h2 className="text-2xl font-bold">后台登录</h2>
-             <p className="text-gray-500 text-sm mt-2">请输入您的 GitHub Personal Access Token (PAT)</p>
+             <p className="text-gray-500 text-sm mt-2">只有<span className="font-bold text-gray-700 dark:text-gray-300">删除、添加、同步</span>时需要 Token</p>
+             <p className="text-gray-500 text-xs mt-1">主页查看/下载订阅文件是公开的，无需登录</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <input 
               type="password" 
               className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              placeholder="ghp_xxxxxxxxxxxx"
+              placeholder="请输入 GitHub PAT Token"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
             />
@@ -189,7 +190,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 取消
               </button>
               <button type="submit" className="flex-1 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors">
-                进入后台
+                验证并进入
               </button>
             </div>
           </form>

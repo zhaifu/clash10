@@ -2,20 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PublicHome } from './pages/PublicHome';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { AppConfig, DEFAULT_SOURCES, DEFAULT_DOMAIN } from './types';
+import { AppConfig, DEFAULT_SOURCES, DEFAULT_DOMAIN, DEFAULT_OWNER, DEFAULT_REPO } from './types';
 
-// Storage Keys
-const STORAGE_CONFIG = 'clashhub_config';
-const STORAGE_SOURCES = 'clashhub_sources';
+// Storage Keys - Bumped version to reset defaults for user
+const STORAGE_CONFIG = 'clashhub_config_v2';
+const STORAGE_SOURCES = 'clashhub_sources_v2';
 
 const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   
-  // App State
+  // App State - Initialize with DEFAULTS so the homepage works immediately in read-only mode
   const [config, setConfig] = useState<AppConfig>({
-    githubToken: '',
-    repoOwner: '',
-    repoName: '',
+    githubToken: '', // Token remains empty until login
+    repoOwner: DEFAULT_OWNER,
+    repoName: DEFAULT_REPO,
     customDomain: DEFAULT_DOMAIN
   });
 
@@ -26,7 +26,14 @@ const App: React.FC = () => {
     const savedConfig = localStorage.getItem(STORAGE_CONFIG);
     if (savedConfig) {
       try {
-        setConfig(JSON.parse(savedConfig));
+        const parsed = JSON.parse(savedConfig);
+        // Merge saved config with defaults to ensure we always have a repo
+        setConfig(prev => ({
+          ...prev,
+          ...parsed,
+          repoOwner: parsed.repoOwner || DEFAULT_OWNER,
+          repoName: parsed.repoName || DEFAULT_REPO
+        }));
       } catch (e) {
         console.error("Failed to parse config", e);
       }

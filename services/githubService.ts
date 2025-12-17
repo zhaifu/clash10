@@ -1,4 +1,4 @@
-import { AppConfig, CustomLink } from '../types';
+import { AppConfig, CustomLink, RepoFile } from '../types';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 
@@ -61,24 +61,65 @@ export const fetchRawContent = async (url: string): Promise<string> => {
 };
 
 /**
+ * Get contents of a directory in the repo
+ */
+export const fetchRepoDir = async (config: AppConfig, path: string): Promise<RepoFile[]> => {
+  const url = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
+  
+  const headers: HeadersInit = {
+    'Accept': 'application/vnd.github.v3+json',
+  };
+
+  // Only add token if it exists (allows fetching public repos without token)
+  if (config.githubToken) {
+    headers['Authorization'] = `token ${config.githubToken}`;
+  }
+
+  const response = await fetch(url, { headers, cache: 'no-cache' });
+
+  if (!response.ok) {
+    // If 404, just return empty array instead of throwing, implies directory doesn't exist yet
+    if (response.status === 404) return [];
+    
+    // Handle Rate Limiting (403) explicitly
+    if (response.status === 403) {
+      throw new Error("GitHub API 速率限制 (Rate Limit Exceeded)。未配置 Token 时每小时仅限 60 次请求。请稍后再试或在后台配置 Token。");
+    }
+
+    throw new Error(`Failed to fetch directory: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (Array.isArray(data)) {
+    return data as RepoFile[];
+  }
+  return [];
+};
+
+/**
  * Get file SHA (needed for updates) and Content from the user's repo
  */
 export const getRepoFile = async (config: AppConfig, path: string) => {
   const url = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
   
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `token ${config.githubToken}`,
-      'Accept': 'application/vnd.github.v3+json',
-    },
-    cache: 'no-store' 
-  });
+  const headers: HeadersInit = {
+    'Accept': 'application/vnd.github.v3+json',
+  };
+
+  if (config.githubToken) {
+    headers['Authorization'] = `token ${config.githubToken}`;
+  }
+  
+  const response = await fetch(url, { headers, cache: 'no-store' });
 
   if (response.status === 404) {
     return null; // File doesn't exist
   }
 
   if (!response.ok) {
+     if (response.status === 403) {
+       throw new Error("API 速率限制 (Rate Limit)。请配置 Token 以获得更高配额。");
+     }
     throw new Error(`GitHub API Error: ${response.statusText}`);
   }
 
@@ -151,22 +192,18 @@ export const saveCustomLinks = async (config: AppConfig, links: CustomLink[]) =>
 export const fetchCustomLinks = async (config: AppConfig): Promise<CustomLink[]> => {
   const path = 'clash/link.json';
   try {
-    // Try via API first if token exists (more reliable for fresh data)
-    if (config.githubToken && config.repoOwner && config.repoName) {
-        const file = await getRepoFile(config, path);
-        if (file) return JSON.parse(file.content);
-        return [];
-    } else {
-        // Fallback to public raw URL if configured, otherwise return empty
-        if(config.repoOwner && config.repoName) {
-             const publicUrl = `https://raw.githubusercontent.com/${config.repoOwner}/${config.repoName}/main/${path}`;
-             const res = await fetch(publicUrl);
-             if(res.ok) return await res.json();
-        }
-        return [];
+    const file = await getRepoFile(config, path);
+    if (file) return JSON.parse(file.content);
+    
+    // Fallback if API fails or token issues (try raw public)
+    if(config.repoOwner && config.repoName) {
+        const publicUrl = `https://raw.githubusercontent.com/${config.repoOwner}/${config.repoName}/main/${path}`;
+        const res = await fetch(publicUrl);
+        if(res.ok) return await res.json();
     }
+    return [];
   } catch (e) {
-    console.warn("Could not fetch custom links (this is normal if the file doesn't exist yet):", e);
+    console.warn("Could not fetch custom links:", e);
     return [];
   }
 };
