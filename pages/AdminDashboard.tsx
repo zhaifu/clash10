@@ -40,12 +40,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, []);
 
   const loadLinks = async () => {
-    if (localConfig.repoOwner && localConfig.repoName && localConfig.githubToken) {
+    // Only attempt load if configured
+    if (localConfig.repoOwner && localConfig.repoName) {
        try {
          const links = await fetchCustomLinks(localConfig);
-         if (links) setCustomLinks(links);
+         if (links && Array.isArray(links)) {
+            setCustomLinks(links);
+         }
        } catch (e) {
-         addLog(`Note: No existing custom links found or failed to load.`);
+         // Silent fail or low priority log
+         console.warn("Failed to load custom links", e);
        }
     }
   };
@@ -125,7 +129,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       alert("Settings Saved & Uploaded to GitHub!");
     } catch (e: any) {
       addLog(`❌ Error saving links: ${e.message}`);
-      alert("Saved locally, but failed to upload links to GitHub. Check logs.");
+      alert("Saved locally. Failed to upload links to GitHub (Check Token/Permissions).");
     }
   };
 
@@ -146,7 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const addLink = () => {
       setCustomLinks([...customLinks, { 
           id: Date.now().toString(), 
-          name: '我的按钮', 
+          name: 'New Link', 
           url: 'https://', 
           color: '#3b82f6', 
           icon: '⭐️' 
