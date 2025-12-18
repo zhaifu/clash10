@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PublicHome } from './pages/PublicHome';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AppConfig, CustomLink, DEFAULT_SOURCES, DEFAULT_DOMAIN, DEFAULT_OWNER, DEFAULT_REPO } from './types';
-import { fetchCustomLinks } from './services/githubService';
+import { fetchCustomLinks, fetchSources } from './services/githubService';
 
 // Storage Keys
 const STORAGE_CONFIG = 'clashhub_config_v3'; 
@@ -57,20 +58,32 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Load latest links from GitHub on mount or repo change
+  // Load latest links & sources from GitHub on mount or repo change
   useEffect(() => {
-    const loadRemoteLinks = async () => {
+    const loadRemoteData = async () => {
       if (config.repoOwner && config.repoName) {
         try {
-          const links = await fetchCustomLinks(config);
+          // 同时加载按钮和源列表 (从 link.json 和 sources.json)
+          const [links, remoteSources] = await Promise.all([
+            fetchCustomLinks(config),
+            fetchSources(config)
+          ]);
+
           if (links && Array.isArray(links)) {
             setCustomLinks(links);
             localStorage.setItem(STORAGE_LINKS, JSON.stringify(links));
           }
-        } catch (e) {}
+
+          if (remoteSources && Array.isArray(remoteSources)) {
+            setSources(remoteSources);
+            localStorage.setItem(STORAGE_SOURCES, JSON.stringify(remoteSources));
+          }
+        } catch (e) {
+            console.error("Cloud data fetch failed", e);
+        }
       }
     };
-    loadRemoteLinks();
+    loadRemoteData();
   }, [config.repoOwner, config.repoName]);
 
   const handleConfigChange = (newConfig: AppConfig) => {
@@ -89,7 +102,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col font-sans bg-day-bg text-day-text dark:bg-night-bg dark:text-night-text transition-colors duration-300">
       <Header 
         onOpenAdmin={() => setIsAdminOpen(true)} 
         title={config.repoName ? `${config.repoName} Hub` : undefined}
@@ -99,8 +112,8 @@ const App: React.FC = () => {
         <PublicHome config={config} sources={sources} customLinks={customLinks} />
       </div>
 
-      <footer className="py-6 text-center text-sm text-gray-500 border-t border-black/5 dark:border-white/5">
-        <p>© {new Date().getFullYear()} Clash Config Hub. Powered by React & GitHub API.</p>
+      <footer className="py-8 text-center text-sm text-gray-500/80 dark:text-gray-400/80 border-t border-black/5 dark:border-white/5">
+        <p>&copy; 2025 Neat科技 | 本站仅用于学习研究，请勿非法使用。</p>
       </footer>
 
       {isAdminOpen && (
