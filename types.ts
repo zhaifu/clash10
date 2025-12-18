@@ -1,9 +1,8 @@
-
 export interface AppConfig {
   githubToken: string;
   repoOwner: string;
   repoName: string;
-  customDomain: string; // e.g., https://clash.fastkj.eu.org
+  customDomain: string; 
 }
 
 export interface CustomLink {
@@ -28,15 +27,15 @@ export interface RepoFile {
 
 export interface SourceMap {
   id: string;
-  sourceUrl: string; // 外部 Github 原始 URL
-  targetFilename: string; // 例如: Neat_config1.yml
+  sourceUrl: string; 
+  targetFilename: string; 
 }
 
-// 默认的公开读取权限仓库：更新为 zhaifu/clash10
+// 默认的公开读取权限仓库
 export const DEFAULT_OWNER = "zhaifu";
 export const DEFAULT_REPO = "clash10";
 
-// 用户请求的初始源列表
-export const DEFAULT_SOURCES: string[] = [];
+// 用户要求的默认显示域名
+export const DEFAULT_DOMAIN = "https://clash.fastkj.eu.org";
 
-export const DEFAULT_DOMAIN = "";
+export const DEFAULT_SOURCES: string[] = [];
