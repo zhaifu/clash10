@@ -9,7 +9,7 @@ export interface CustomLink {
   id: string;
   name: string;
   url: string;
-  icon?: string; // URL to icon or emoji
+  icon?: string; // 图标 URL 或表情符号
   color: string;
 }
 
@@ -27,15 +27,15 @@ export interface RepoFile {
 
 export interface SourceMap {
   id: string;
-  sourceUrl: string; // The external raw Github URL
-  targetFilename: string; // e.g., Neat_config1.yml
+  sourceUrl: string; // 外部 Github 原始 URL
+  targetFilename: string; // 例如: Neat_config1.yml
 }
 
-// Hardcoded defaults for public read-only access
-export const DEFAULT_OWNER = "zhaifu";
-export const DEFAULT_REPO = "clash10";
+// 默认的公开读取权限仓库
+export const DEFAULT_OWNER = "dongchengjie";
+export const DEFAULT_REPO = "airport";
 
-// Default source list based on user request (Cleared old sources)
+// 用户请求的初始源列表
 export const DEFAULT_SOURCES: string[] = [];
 
 export const DEFAULT_DOMAIN = "";

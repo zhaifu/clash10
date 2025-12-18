@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Copy, Check, Download, ExternalLink, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
-import { AppConfig, CustomLink, RepoFile, DEFAULT_DOMAIN } from '../types';
+import { Copy, Check, Download, FileText, Database } from 'lucide-react';
+import { AppConfig, CustomLink, RepoFile } from '../types';
 import { fetchCustomLinks, fetchRepoDir } from '../services/githubService';
 
 interface PublicHomeProps {
@@ -8,48 +8,58 @@ interface PublicHomeProps {
   sources: string[];
 }
 
+const STORAGE_KEY_FILES = 'clashhub_cached_files';
+
 export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
   const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
   const [repoFiles, setRepoFiles] = useState<RepoFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isFromCache, setIsFromCache] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  const domain = config.customDomain || DEFAULT_DOMAIN;
-
-  // Load Content
   useEffect(() => {
-    // Attempt to load content immediately if we have repo details (which we now have by default)
+    // 初始加载：尝试从缓存读取，让界面秒开
+    const cached = localStorage.getItem(STORAGE_KEY_FILES);
+    if (cached) {
+      try {
+        setRepoFiles(JSON.parse(cached));
+        setIsFromCache(true);
+      } catch (e) {}
+    }
+
     if (config.repoOwner && config.repoName) {
       loadContent();
     }
-  }, [config.repoOwner, config.repoName, config.githubToken]); // Reload if config changes
+  }, [config.repoOwner, config.repoName, config.githubToken]);
 
   const loadContent = async () => {
     setIsLoading(true);
-    setError(null);
+    
     try {
-      // 1. Fetch Custom Links (link.json)
-      // We don't block the UI if this fails
-      fetchCustomLinks(config).then(links => {
-         if (links && Array.isArray(links)) setCustomLinks(links);
-      });
+      // 获取自定义链接
+      const links = await fetchCustomLinks(config);
+      if (links && Array.isArray(links)) setCustomLinks(links);
 
-      // 2. Fetch Subscription Files in /clash directory
+      // 获取订阅文件列表
       const files = await fetchRepoDir(config, 'clash');
       
-      // Filter for valid YAML/YML files
-      const subFiles = files.filter(f => 
-        (f.name.endsWith('.yaml') || f.name.endsWith('.yml')) && 
-        f.type === 'file'
-      );
-      setRepoFiles(subFiles);
+      if (files === null) {
+        // 说明触发了 API 限制或请求失败，此时我们什么都不做，保持已有的（可能是缓存的）列表
+        console.log("GitHub API Rate Limited. Using local cache.");
+        setIsFromCache(true);
+      } else {
+        const subFiles = files.filter(f => 
+          (f.name.endsWith('.yaml') || f.name.endsWith('.yml')) && 
+          f.type === 'file'
+        );
+        setRepoFiles(subFiles);
+        setIsFromCache(false);
+        // 更新缓存
+        localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(subFiles));
+      }
 
     } catch (e: any) {
-      console.error("Failed to load content", e);
-      // Clean up the error message for display
-      const msg = e.message || "无法加载订阅文件列表。";
-      setError(msg);
+      console.error("Content load failed", e);
     } finally {
       setIsLoading(false);
     }
@@ -64,63 +74,54 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
   return (
     <main className="max-w-4xl mx-auto px-6 py-12 space-y-12 animate-fade-in">
       
-      {/* Intro Section */}
-      <div className="text-center space-y-4 relative">
+      <div className="text-center space-y-4">
         <h2 className="text-4xl font-extrabold tracking-tight sm:text-5xl bg-clip-text text-transparent bg-gradient-to-br from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
           Clash Subscription Hub
         </h2>
         <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
           高速、稳定、精简的 Clash 配置订阅托管。
         </p>
-        <button 
-          onClick={loadContent} 
-          className="absolute top-0 right-0 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-400"
-          title="刷新列表"
-        >
-          <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
       </div>
 
-      {/* Subscription List */}
+      {/* 订阅列表部分 */}
       <section className="space-y-4">
         <div className="flex items-center justify-between pl-1">
-          <h3 className="text-xl font-semibold opacity-80">
+          <h3 className="text-xl font-semibold opacity-80 flex items-center gap-2">
             订阅列表 ({repoFiles.length})
-            <span className="ml-2 text-xs font-normal text-gray-400">来自 {config.repoOwner}/{config.repoName}</span>
+            {isFromCache && (
+              <span className="flex items-center gap-1 text-[10px] font-normal px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-400" title="API 限制中，正在显示本地缓存的数据">
+                <Database className="w-3 h-3" /> 缓存模式
+              </span>
+            )}
+            <span className="ml-auto text-xs font-normal text-gray-400 hidden sm:inline">来自 {config.repoOwner}/{config.repoName}</span>
           </h3>
         </div>
 
-        {error && (
-           <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm flex items-start gap-2">
-             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-             <span>{error}</span>
-           </div>
-        )}
-
         <div className="grid gap-4">
-          {repoFiles.length === 0 && !isLoading && !error && (
+          {repoFiles.length === 0 && !isLoading && (
             <div className="text-center py-12 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
-              <p className="text-gray-500 font-medium">暂无订阅文件</p>
-              <p className="text-sm text-gray-400 mt-2">请确认仓库 {config.repoOwner}/{config.repoName} 中存在 `clash` 文件夹且包含 .yaml 文件。</p>
+              <p className="text-gray-500 font-medium">暂无数据</p>
+              <p className="text-sm text-gray-400 mt-2">系统将自动尝试获取，或在后台检查配置。</p>
+            </div>
+          )}
+
+          {isLoading && repoFiles.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-sm text-gray-400">正在同步最新配置...</p>
             </div>
           )}
 
           {repoFiles.map((file, index) => {
-            // Construct the subscription URL
-            let subUrl = '';
-            if (config.customDomain && config.customDomain.startsWith('http')) {
-              const baseUrl = config.customDomain.replace(/\/$/, '');
-              subUrl = `${baseUrl}/clash/${file.name}`;
-            } else {
-               // Fallback to jsDelivr
-               subUrl = `https://cdn.jsdelivr.net/gh/${config.repoOwner}/${config.repoName}@main/clash/${file.name}`;
-            }
+            let subUrl = config.customDomain 
+              ? `${config.customDomain.replace(/\/$/, '')}/clash/${file.name}`
+              : `https://cdn.jsdelivr.net/gh/${config.repoOwner}/${config.repoName}@main/clash/${file.name}`;
 
             const isCopied = copiedIndex === index;
 
             return (
               <div 
-                key={file.sha} 
+                key={file.sha || file.name} 
                 className="group relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl bg-day-card dark:bg-night-card shadow-sm border border-gray-200 dark:border-gray-800 hover:border-blue-500/50 dark:hover:border-blue-400/50 transition-all duration-300"
               >
                 <div className="flex-1 min-w-0 mr-4">
@@ -129,15 +130,13 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
                     <span className="font-medium text-sm text-gray-700 dark:text-gray-300">{file.name}</span>
                     <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(1)} KB</span>
                   </div>
-                  <p className="text-sm sm:text-base font-mono truncate text-gray-500 dark:text-gray-400 select-all" title={subUrl}>
-                    {subUrl}
-                  </p>
+                  <p className="text-sm font-mono truncate text-gray-500 dark:text-gray-400 select-all">{subUrl}</p>
                 </div>
 
-                <div className="flex items-center gap-2 mt-3 sm:mt-0 w-full sm:w-auto">
+                <div className="flex items-center gap-2 mt-3 sm:mt-0">
                   <button
                     onClick={() => handleCopy(subUrl, index)}
-                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       isCopied 
                         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
                         : 'bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300'
@@ -150,7 +149,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
                     href={subUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-none p-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="p-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-gray-600 dark:text-gray-400 transition-colors"
                   >
                     <Download className="w-4 h-4" />
                   </a>
@@ -161,7 +160,7 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
         </div>
       </section>
 
-      {/* Custom Buttons / Shortcuts */}
+      {/* 快捷导航部分 */}
       {customLinks.length > 0 && (
         <section className="space-y-4">
           <h3 className="text-xl font-semibold opacity-80 pl-1">快捷导航</h3>
@@ -180,13 +179,9 @@ export const PublicHome: React.FC<PublicHomeProps> = ({ config, sources }) => {
                   style={{ backgroundColor: link.color || '#3b82f6', color: '#fff' }}
                 >
                   {link.icon ? (
-                    link.icon.startsWith('http') ? (
-                       <img src={link.icon} alt="" className="w-8 h-8 object-contain" />
-                    ) : (
-                       <span>{link.icon}</span>
-                    )
+                    link.icon.startsWith('http') ? <img src={link.icon} className="w-8 h-8 object-contain" /> : <span>{link.icon}</span>
                   ) : (
-                    <ExternalLink className="w-6 h-6" />
+                    <FileText className="w-6 h-6" />
                   )}
                 </div>
                 <span className="font-medium text-center text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
