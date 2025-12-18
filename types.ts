@@ -1,3 +1,4 @@
+
 export interface AppConfig {
   githubToken: string;
   repoOwner: string;
@@ -31,9 +32,9 @@ export interface SourceMap {
   targetFilename: string; // 例如: Neat_config1.yml
 }
 
-// 默认的公开读取权限仓库
+// 默认的公开读取权限仓库：更新为 zhaifu/clash10
 export const DEFAULT_OWNER = "zhaifu";
-export const DEFAULT_REPO = "chash10";
+export const DEFAULT_REPO = "clash10";
 
 // 用户请求的初始源列表
 export const DEFAULT_SOURCES: string[] = [];

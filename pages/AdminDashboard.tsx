@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Plus, Trash2, Github, Key, Layout, Globe, Lock, Link as LinkIcon, Palette, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Save, RefreshCw, Plus, Trash2, Github, Key, Layout, Globe, Lock, Link as LinkIcon, Palette, Image as ImageIcon, AlertCircle, ListPlus, X } from 'lucide-react';
 import { AppConfig, CustomLink, DEFAULT_SOURCES, DEFAULT_DOMAIN } from '../types';
 import { fetchRawContent, getRepoFile, uploadToRepo, saveCustomLinks, fetchCustomLinks } from '../services/githubService';
 
@@ -29,6 +29,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [localConfig, setLocalConfig] = useState<AppConfig>(config);
   const [localSources, setLocalSources] = useState<string[]>(sources.length ? sources : DEFAULT_SOURCES);
   const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
+  
+  // Batch Add State
+  const [showBatchAdd, setShowBatchAdd] = useState(false);
+  const [batchInputValue, setBatchInputValue] = useState('');
 
   // Initialize
   useEffect(() => {
@@ -77,7 +81,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
         for (let i = 0; i < localSources.length; i++) {
             const sourceUrl = localSources[i];
-            // We use 'clash/' as the default folder for organization
             const targetFilename = `clash/Neat_config${i + 1}.yml`;
             
             if (!sourceUrl.trim()) continue;
@@ -87,7 +90,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             
             try {
                 const rawContent = await fetchRawContent(sourceUrl);
-                
                 const currentFile = await getRepoFile(localConfig, targetFilename);
                 
                 addLog(`正在上传到 ${localConfig.repoOwner}/${localConfig.repoName}/${targetFilename}...`);
@@ -143,6 +145,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const addSource = () => setLocalSources([...localSources, ""]);
+
+  const handleBatchAdd = () => {
+    const urls = batchInputValue
+      .split('\n')
+      .map(u => u.trim())
+      .filter(u => u && (u.startsWith('http://') || u.startsWith('https://')));
+    
+    if (urls.length > 0) {
+      setLocalSources([...localSources, ...urls]);
+      setBatchInputValue('');
+      setShowBatchAdd(false);
+      addLog(`已批量添加 ${urls.length} 个新源。`);
+    }
+  };
 
   const addLink = () => {
       setCustomLinks([...customLinks, { 
@@ -345,20 +361,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Globe className="w-5 h-5 text-green-500" /> 订阅源同步 (同步至 clash/ 目录)
                   </h3>
-                  <button onClick={addSource} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300 hover:scale-105 transition-transform text-sm font-medium">
-                    <Plus className="w-4 h-4" /> 添加源
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setShowBatchAdd(!showBatchAdd)} 
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${showBatchAdd ? 'bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 hover:scale-105'}`}
+                    >
+                      {showBatchAdd ? <X className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
+                      {showBatchAdd ? '取消' : '批量添加'}
+                    </button>
+                    <button onClick={addSource} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300 hover:scale-105 transition-transform text-sm font-medium">
+                      <Plus className="w-4 h-4" /> 添加源
+                    </button>
+                  </div>
                 </div>
+
+                {showBatchAdd && (
+                  <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <label className="block text-xs font-bold uppercase tracking-tight text-blue-600 dark:text-blue-400 mb-2">批量输入订阅链接 (每行一个)</label>
+                    <textarea 
+                      className="w-full h-32 p-3 text-sm font-mono rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-black/40 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      placeholder="https://example.com/sub1&#10;https://example.com/sub2"
+                      value={batchInputValue}
+                      onChange={(e) => setBatchInputValue(e.target.value)}
+                    ></textarea>
+                    <button 
+                      onClick={handleBatchAdd}
+                      className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors"
+                    >
+                      确认添加有效链接
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                   {localSources.map((url, i) => (
-                    <div key={i} className="flex gap-2 items-center">
+                    <div key={i} className="flex gap-2 items-center group">
+                      <div className="text-[10px] font-mono text-gray-400 w-6 text-right select-none">{i+1}</div>
                       <input 
-                        className="flex-1 text-xs font-mono p-2.5 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5"
+                        className="flex-1 text-xs font-mono p-2.5 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5 focus:bg-white dark:focus:bg-black/20 focus:ring-1 focus:ring-blue-400 outline-none"
                         value={url}
                         onChange={e => updateSource(i, e.target.value)}
                         placeholder="订阅链接 https://..."
                       />
-                      <button onClick={() => removeSource(i)} className="p-2 text-gray-400 hover:text-red-500">
+                      {/* Fixed: Use correct index variable "i" from map loop instead of undefined "index" */}
+                      <button onClick={() => removeSource(i)} className="p-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -366,7 +412,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {localSources.length === 0 && (
                     <div className="flex items-center gap-2 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 text-sm">
                       <AlertCircle className="w-4 h-4" />
-                      <span>尚未添加任何订阅源。点击“添加源”开始。</span>
+                      <span>尚未添加任何订阅源。点击“添加源”或“批量添加”开始。</span>
                     </div>
                   )}
                 </div>

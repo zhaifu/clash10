@@ -1,19 +1,20 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PublicHome } from './pages/PublicHome';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AppConfig, DEFAULT_SOURCES, DEFAULT_DOMAIN, DEFAULT_OWNER, DEFAULT_REPO } from './types';
 
-// Storage Keys - Bumped version to reset defaults for user
-const STORAGE_CONFIG = 'clashhub_config_v2';
-const STORAGE_SOURCES = 'clashhub_sources_v2';
+// Storage Keys - 使用版本号以在默认值更新时强制刷新部分配置
+const STORAGE_CONFIG = 'clashhub_config_v3'; 
+const STORAGE_SOURCES = 'clashhub_sources_v3';
 
 const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   
-  // App State - Initialize with DEFAULTS so the homepage works immediately in read-only mode
+  // App State - 使用默认值初始化，确保主页立即显示内容
   const [config, setConfig] = useState<AppConfig>({
-    githubToken: '', // Token remains empty until login
+    githubToken: '', 
     repoOwner: DEFAULT_OWNER,
     repoName: DEFAULT_REPO,
     customDomain: DEFAULT_DOMAIN
@@ -21,22 +22,23 @@ const App: React.FC = () => {
 
   const [sources, setSources] = useState<string[]>(DEFAULT_SOURCES);
 
-  // Load from LocalStorage on mount
+  // 从本地存储加载配置
   useEffect(() => {
     const savedConfig = localStorage.getItem(STORAGE_CONFIG);
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
-        // Merge saved config with defaults to ensure we always have a repo
-        setConfig(prev => ({
-          ...prev,
+        // 如果本地存的是旧的默认值或者为空，我们合并最新的默认值
+        setConfig({
           ...parsed,
           repoOwner: parsed.repoOwner || DEFAULT_OWNER,
           repoName: parsed.repoName || DEFAULT_REPO
-        }));
+        });
       } catch (e) {
         console.error("Failed to parse config", e);
       }
+    } else {
+      // 如果完全没有存储，保持初始状态（即 DEFAULT_OWNER/DEFAULT_REPO）
     }
 
     const savedSources = localStorage.getItem(STORAGE_SOURCES);
