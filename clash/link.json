@@ -6,18 +6,25 @@
     "color": "#3b82f6",
     "icon": "⭐️"
   },
-    {
-    "id": "1766034310243",
-    "name": "新按钮2",
+  {
+    "id": "1766035550334",
+    "name": "新按钮3",
     "url": "https://kjdkkjvkjkvz.com",
-    "color": "#3b82f6",
+    "color": "#91ec7e",
     "icon": "⭐️"
   },
-    {
-    "id": "1766034310243",
-    "name": "新按钮2",
+  {
+    "id": "1766035568210",
+    "name": "新按钮4",
     "url": "https://kjdkkjvkjkvz.com",
-    "color": "#3b82f6",
+    "color": "#f4f73b",
+    "icon": "⭐️"
+  },
+  {
+    "id": "1766035578434",
+    "name": "新按钮5",
+    "url": "https://kjdkkjvkjkvz.com",
+    "color": "#b53bf7",
     "icon": "⭐️"
   }
 ]
