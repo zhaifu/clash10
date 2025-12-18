@@ -32,8 +32,8 @@ export interface SourceMap {
 }
 
 // 默认的公开读取权限仓库
-export const DEFAULT_OWNER = "dongchengjie";
-export const DEFAULT_REPO = "airport";
+export const DEFAULT_OWNER = "zhaifu";
+export const DEFAULT_REPO = "chash10";
 
 // 用户请求的初始源列表
 export const DEFAULT_SOURCES: string[] = [];
