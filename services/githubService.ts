@@ -3,113 +3,114 @@ import { AppConfig, CustomLink, RepoFile } from '../types';
 const GITHUB_API_BASE = 'https://api.github.com';
 
 /**
- * Helper to convert content to Base64 (UTF-8 safe)
+ * 字符转换工具
  */
 function toBase64(str: string): string {
   return window.btoa(unescape(encodeURIComponent(str)));
 }
 
-/**
- * Helper to decode Base64 (UTF-8 safe)
- */
 function fromBase64(str: string): string {
   return decodeURIComponent(escape(window.atob(str)));
 }
 
 /**
- * Fetch a raw file from any URL with Proxy Fallback.
+ * 通用内容获取（带代理重试）
  */
 export const fetchRawContent = async (url: string): Promise<string> => {
   let targetUrl = url;
-  
   if (url.includes('github.com') && url.includes('/blob/')) {
     targetUrl = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
   }
 
+  // 1. 直接尝试
   try {
     const response = await fetch(targetUrl);
     if (response.ok) return await response.text();
-    if (response.status === 404) throw new Error(`404 Not Found: ${targetUrl}`);
-  } catch (error: any) {
-    if (error.message.includes('404')) throw error;
+  } catch (e) {}
+
+  // 2. 代理尝试
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const response = await fetch(proxy);
+      if (response.ok) return await response.text();
+    } catch (e) {}
   }
 
-  try {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error(`Proxy Fetch Failed: ${response.statusText}`);
-    return await response.text();
-  } catch (error) {
-    throw new Error(`Failed to fetch source content.`);
-  }
+  throw new Error(`无法获取内容: ${url}`);
 };
 
 /**
- * Get contents of a directory in the repo
+ * 获取目录列表（核心修复：多重代理回退）
  */
 export const fetchRepoDir = async (config: AppConfig, path: string): Promise<RepoFile[] | null> => {
   if (!config.repoOwner || !config.repoName) return [];
   
-  const url = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
-  
-  const headers: HeadersInit = {
-    'Accept': 'application/vnd.github.v3+json',
-  };
+  const apiUrl = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
+  const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
+  if (config.githubToken) headers['Authorization'] = `token ${config.githubToken}`;
 
-  if (config.githubToken) {
-    headers['Authorization'] = `token ${config.githubToken}`;
-  }
-
+  // 1. 尝试直接请求 API
   try {
-    const response = await fetch(url, { headers, cache: 'no-cache' });
-
-    if (!response.ok) {
-      if (response.status === 403) {
-        // Rate limit hit - return null to signal UI to use cache
-        return null;
-      }
-      if (response.status === 404) return [];
-      return [];
+    const response = await fetch(apiUrl, { headers, cache: 'no-cache' });
+    if (response.ok) {
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     }
+  } catch (e) {}
 
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    return null;
-  }
+  // 2. 尝试代理 A: AllOrigins
+  try {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+    const response = await fetch(proxyUrl);
+    if (response.ok) {
+      const wrapper = await response.json();
+      const data = JSON.parse(wrapper.contents);
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {}
+
+  // 3. 尝试代理 B: CORSProxy.io
+  try {
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+    const response = await fetch(proxyUrl);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {}
+
+  // 4. 极端情况：如果 API 列表完全挂了，返回 null 触发 PublicHome 的“强制嗅探”机制
+  return null;
 };
 
 /**
- * Get file SHA and Content.
+ * 获取单个文件
  */
 export const getRepoFile = async (config: AppConfig, path: string) => {
   if (!config.repoOwner || !config.repoName) return null;
-
   const url = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
-  
   const headers: HeadersInit = { 'Accept': 'application/vnd.github.v3+json' };
   if (config.githubToken) headers['Authorization'] = `token ${config.githubToken}`;
   
   try {
-    const response = await fetch(url, { headers, cache: 'no-store' });
-    if (response.status === 404) return null;
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    return {
-      sha: data.sha,
-      content: fromBase64(data.content),
-    };
-  } catch (e) {
-    return null;
-  }
+    const response = await fetch(url, { headers });
+    if (response.ok) {
+      const data = await response.json();
+      return { sha: data.sha, content: fromBase64(data.content) };
+    }
+  } catch (e) {}
+  return null;
 };
 
+/**
+ * 上传/同步文件
+ */
 export const uploadToRepo = async (config: AppConfig, path: string, content: string, message: string, sha?: string) => {
-  if (!config.repoOwner || !config.repoName || !config.githubToken) {
-    throw new Error("配置缺失。");
-  }
-
   const url = `${GITHUB_API_BASE}/repos/${config.repoOwner}/${config.repoName}/contents/${path}`;
   const body: any = { message, content: toBase64(content) };
   if (sha) body.sha = sha;
@@ -126,7 +127,7 @@ export const uploadToRepo = async (config: AppConfig, path: string, content: str
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(`上传失败: ${errData.message || response.statusText}`);
+    throw new Error(errData.message || "上传失败");
   }
   return await response.json();
 };
@@ -134,24 +135,19 @@ export const uploadToRepo = async (config: AppConfig, path: string, content: str
 export const saveCustomLinks = async (config: AppConfig, links: CustomLink[]) => {
   const path = 'clash/link.json';
   const currentFile = await getRepoFile(config, path);
-  const content = JSON.stringify(links, null, 2);
-  await uploadToRepo(config, path, content, `Update links ${new Date().toISOString()}`, currentFile?.sha);
+  await uploadToRepo(config, path, JSON.stringify(links, null, 2), `Update links ${Date.now()}`, currentFile?.sha);
 };
 
 export const fetchCustomLinks = async (config: AppConfig): Promise<CustomLink[]> => {
-  const path = 'clash/link.json';
   if (!config.repoOwner || !config.repoName) return [];
-  
+  const path = 'clash/link.json';
   const publicUrl = `https://raw.githubusercontent.com/${config.repoOwner}/${config.repoName}/main/${path}`;
+  
   try {
-    const res = await fetch(publicUrl, { cache: 'no-cache' });
+    const res = await fetch(publicUrl);
     if (res.ok) return await res.json();
   } catch (e) {}
-
-  try {
-    const file = await getRepoFile(config, path);
-    if (file) return JSON.parse(file.content);
-  } catch (e) {}
-
-  return [];
+  
+  const file = await getRepoFile(config, path);
+  return file ? JSON.parse(file.content) : [];
 };
